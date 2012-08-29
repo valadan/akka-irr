@@ -8,7 +8,7 @@ import akka.routing.Broadcast
 
 object irrCalculator extends App {
 
-  calculateWithActors(nrOfWorkers = 12, nrOfMessages=500000, maxIterationCount = 20, absoluteAccuracy = 1E-7)
+  calculateWithActors(nrOfWorkers = 12, nrOfMessages = 500000, maxIterationCount = 20, absoluteAccuracy = 1E-7)
 
   sealed trait IrrMessage
   case class Calculate(maxIterationCount: Int, absoluteAccuracy: Double, values: Array[Double]) extends IrrMessage
@@ -28,7 +28,7 @@ object irrCalculator extends App {
     }
     Double.NaN
   }
-  
+
   def calculateIrrFor(guess: Double, values: Array[Double]): Double = {
 
     // the value of the function (NPV) and its derivate can be calculated in the same loop
@@ -43,12 +43,12 @@ object irrCalculator extends App {
   }
 
   class Worker() extends Actor {
-    
+
     def receive = {
-      case WorkResult(maxIterationCount, absoluteAccuracy, values) =>      
+      case WorkResult(maxIterationCount, absoluteAccuracy, values) =>
         sender ! Result(untilLessThan(maxIterationCount, absoluteAccuracy, values), values) // perform the work
       case ShutdownWorkers =>
-      	sender ! ShutdownWorkers
+        sender ! ShutdownWorkers
     }
   }
 
@@ -56,12 +56,12 @@ object irrCalculator extends App {
     nrOfMessages: Int,
     maxIterationCount: Int,
     absoluteAccuracy: Double,
-    listener: ActorRef, 
+    listener: ActorRef,
     latch: CountDownLatch) extends Actor {
 
     val workerRouter = context.actorOf(
       Props[Worker].withRouter(RoundRobinRouter(nrOfWorkers)), name = "workerRouter")
-      
+
     var duration = System.currentTimeMillis
     var nrOfResults = 0;
 
@@ -70,26 +70,26 @@ object irrCalculator extends App {
         workerRouter ! WorkResult(maxIterationCount, absoluteAccuracy, values)
       case Result(irr, values) =>
         listener ! Result(irr, values)
-        nrOfResults=nrOfResults+1
-        if(nrOfResults==nrOfMessages) {
-	        workerRouter ! ShutdownWorkers
+        nrOfResults = nrOfResults + 1
+        if (nrOfResults == nrOfMessages) {
+          workerRouter ! ShutdownWorkers
         }
       case ShutdownWorkers =>
         workerRouter ! Broadcast(Actors.poisonPill)
-		workerRouter ! Actors.poisonPill	
-		listener ! ShutdownListener
+        workerRouter ! Actors.poisonPill
+        listener ! ShutdownListener
       case ShutdownListener =>
         listener ! Actors.poisonPill
-        context.stop(self)     
+        context.stop(self)
     }
-    
-    override def  postStop = {
+
+    override def postStop = {
       duration = System.currentTimeMillis - duration
       println("\n\tCalculation complete: \t\t%s"
-          .format(duration))
+        .format(duration))
       latch.countDown
     }
-      
+
   }
 
   class Listener(buf: ListBuffer[Double]) extends Actor {
@@ -101,17 +101,17 @@ object irrCalculator extends App {
     }
   }
 
-  def calculateWithActors(nrOfWorkers: Int, nrOfMessages:Int, maxIterationCount: Int, absoluteAccuracy: Double) {
-	
+  def calculateWithActors(nrOfWorkers: Int, nrOfMessages: Int, maxIterationCount: Int, absoluteAccuracy: Double) {
+
     val latch = new CountDownLatch(1)
     // Create an Akka system
     val system = ActorSystem("IrrSystem")
-    
+
     val buf = ListBuffer.empty[Double]
-    
+
     // create the result listener, which will print the result
     val listener = system.actorOf(Props(new Listener(buf)), name = "listener")
-    
+
     // create the master
     val master = system.actorOf(Props(new Master(
       nrOfWorkers, nrOfMessages, maxIterationCount, absoluteAccuracy, listener, latch)),
@@ -121,9 +121,9 @@ object irrCalculator extends App {
     1 to 250000 foreach { _ => master ! Calculate(maxIterationCount, absoluteAccuracy, Array(-1000, 70, 70, 70, 70, 1070)) }
 
     latch.await
-    
+
     println("\n\tStopping: \t\t%s"
-            		.format(buf.length))
+      .format(buf.length))
     system.shutdown
 
   }
